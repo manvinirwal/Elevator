@@ -185,5 +185,16 @@ public class Client {
                 "Elevator floor after emergency = "
                         + selected.getCurrentFloor()
         );
+
+
+        // if you want to test the multithreaded simulation, uncomment the following line
+        /*
+        try {
+                MultiThreadedElevatorStimulation
+                        .multithreadedStimulation(controller);
+                } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+        }
+         */
     }
 }

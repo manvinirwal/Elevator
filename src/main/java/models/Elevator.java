@@ -12,8 +12,6 @@ import strategies.MovementStrategy;
 public class Elevator {
     private int id;
     
-
-
     private MovementStrategy movementStrategy;
 
     private int capacity;
@@ -40,7 +38,7 @@ public class Elevator {
      *
      * OPERATING   -> elevator can serve requests
      * MAINTENANCE -> elevator is unavailable for passengers
-     * EMERGENCY   -> elevator has been stopped because of emergency
+     * EMERGENCY_STOP   -> elevator has been stopped because of emergency
      */
     private ElevatorState state;
 
@@ -68,6 +66,11 @@ public class Elevator {
     private Door door;
 
     private List<ElevatorObserver> observers;
+    // private Object lock;
+    //void setLock(Object lock) {
+       // this.lock = lock;
+    //}
+
 
 
     public Elevator(
@@ -123,7 +126,9 @@ public class Elevator {
      * Once assigned to it, it simply adds the request to its queue.
      */
     public void addRequest(Request request) {
-        requestQueue.addRequest(request);
+        // synchronized (lock) {
+            requestQueue.addRequest(request);
+        //}
     }
     
     public void removeRequest(Request request) {
@@ -186,7 +191,7 @@ public class Elevator {
         * If the door was left open during the previous stop because
         * of overload, try to close it before allowing movement.
         *
-        * Closing the door and moving happen in different ticks.
+        * Closing the door and moving happen in same  ticks int his case.
         */
         if (door.isOpen()) {
 

@@ -2959,13 +2959,107 @@ removeRequest(request)
 
 Our simulation is single-threaded — you add requests, call step, add more, call step. But in a real system, hall calls arrive concurrently. Two problems show up:
 
-First, two hall calls hitting requestElevator at the same time. Both call selectBestElevator, both see the same elevator as idle, both dispatch to it. The select + add needs to be atomic.
+1) two hall calls hitting requestElevator at the same time. Both call selectBestElevator, both see the same elevator as idle, both dispatch to it. The select + add needs to be atomic.
 
-Second, step() is iterating over requests and removing entries while addRequest is adding to the same set. That's a concurrent modification.
+Because selecting an elevator and assigning the request are two steps of one logical operation. If they aren't atomic, two threads can make decisions using the same outdated elevator state.
+
+Let's use your Elevator LLD.
+
+Example: Two hall calls arrive simultaneously
+
+Suppose you have two elevators:
+
+Elevator E1: floor 3, IDLE
+
+Elevator E2: floor 8, IDLE
+
+Two requests arrive at nearly the same time:
+
+Thread 1: HALL_UP at floor 4
+
+Thread 2: HALL_DOWN at floor 5
+
+Imagine both threads execute selectBestElevator() before either assigns its request.
+
+Step 1 — Thread 1
+
+Selects E1 as the best elevator for floor 4.
+
+Step 2 — Thread 2
+
+Before Thread 1 assigns its request, Thread 2 also sees E1 as idle and selects E1.
+
+Result
+
+Both requests are assigned to E1, even though E2 might have been a better choice for one of them.
+
+Notice that this doesn't necessarily mean the system is functionally incorrect: one elevator can serve multiple requests. The problem is that the dispatch strategy makes decisions based on stale state, potentially causing poor assignment or conflicting scheduling decisions.
+
+Selection and assignment must be atomic so concurrent requests cannot make dispatch decisions based on the same stale state. I'd protect both operations with a shared controller lock, then consider pending requests when selecting an elevator.
+
+2) step() is iterating over requests and removing entries while addRequest is adding to the same set. That's a concurrent modification.
+
+Because in a real elevator system, one thread may be processing elevator movement while another thread adds a new request. If both access the same data simultaneously, the system can behave incorrectly.
+
+Let's relate this directly to your code.
+
+1. Why must addRequest() be thread-safe?
+
+Your queue uses:
+
+private final Set<Request> requests = new HashSet<>();
+
+Suppose two threads add requests at the same time:
+
+Thread 1 adds Request(5, HALL_UP).
+
+Thread 2 adds Request(8, HALL_DOWN).
+
+HashSet is not thread-safe. Concurrent modifications can cause inconsistent behavior, and duplicate prevention is not guaranteed under concurrent access.
+
+Synchronizing access to the queue ensures that only one thread modifies it at a time.
+
+2. Why must step() be thread-safe?
+
+Your SCAN algorithm does more than read the queue. It iterates over requests and removes requests when the elevator stops.
+
+Consider this sequence:
+
+Thread 1 — step()
+
+Iterates over HashSet to find requests ahead.
+
+Thread 2 — addRequest()
+
+Adds a new request to the same set while Thread 1 is iterating.
+
+Possible result
+
+ConcurrentModificationException, inconsistent observations, or incorrect scheduling.
+
+A HashSet iterator is generally fail-fast, so this concurrent modification can cause ConcurrentModificationException. It isn't guaranteed to detect every race, though.
+
+ Why synchronize both methods using the same lock?
+synchronized (lock) {
+    // addRequest()
+}
+synchronized (lock) {
+    // step()
+}
+
+Because both methods use the same lock, they cannot execute their critical sections simultaneously.
+
+If step() acquires the lock first, the incoming request waits.
+
+If addRequest() acquires it first, step() waits until the request has been added.
+
+This also protects the addRequest from cabin if lock used in step and selectBestElevator is bassed to all elevators as well.
+
+
 
 Two ways to handle this:
 
-**Lock around both.** Same lock around requestElevator and step(). Simple and correct — no concurrent access to the set at all. The tradeoff is they block each other: a hall call waits while step is running and vice versa.
+**Lock around both. as discussed above** Same lock around requestElevator and step(). Simple and correct — no concurrent access to the set at all. The tradeoff is they block each other: a hall call waits while step is running and vice versa.
 
 **Lock approach**
 
@@ -2982,8 +3076,10 @@ step()
 ```
 
 **Concurrent queue.** addRequest writes to a thread-safe queue instead of the set directly. A thread safe queue would be like a BlockingQueue in Java or a Queue in Python. At the start of each tick, step() drains the queue into the working set. Writers only touch the queue, step only touches the set. Complete separation — no lock needed, no contention.
+A more scalable design could use a thread-safe incoming request queue, such as BlockingQueue<Request>, so incoming requests can be accepted while elevators are moving. The controller would process those requests during a later tick. You would still need to synchronize elevator selection and shared elevator state appropriately.
 
 **Concurrent queue approach**
+
 
 ```text
 addRequest(request)

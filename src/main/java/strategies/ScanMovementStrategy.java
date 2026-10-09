@@ -7,12 +7,13 @@ import models.enums.Direction;
 public class ScanMovementStrategy implements MovementStrategy {
 
 
-    // pickup direction and movment can happen in same tick  // similarly reverse directiona and movement can happen in same tick
-    // so we dont return from step function (after picking direction or reversing we complete our moevemnt)
+    // choosing direction form idle and movment can happen in same tick  
+    // // similarly reverse direction and movement can happen in same tick
+    // so we dont return from step function (after choosing  or reversing direction->we complete our moevemnt)
     // but stop and movment cannot happen in same tick-- so we retrun after stop(ie after catering req at the floor-- cateringreq is  a tick)
   // Choosing direction + moving = same tick
    // Reversing + moving = same tick
-    //Stopping = one tick
+    //Stopping(serving req) = one tick
     // Next movement happens in a later tick
 
     @Override
@@ -71,9 +72,9 @@ public class ScanMovementStrategy implements MovementStrategy {
         if (stopRequest != null) {
 
             /*
-             * Request has been reached.
+             * Requested floor has been reached.
              */
-            System.out.println("Request is currentlt being served at floor" + elevator.getCurrentFloor());
+            System.out.println("Request is currently being served at floor" + elevator.getCurrentFloor());
             elevator.getRequestQueue().removeRequest(stopRequest);
 
             /*
@@ -81,7 +82,6 @@ public class ScanMovementStrategy implements MovementStrategy {
              */
             elevator.stop();
             return;
-
             
         }
 
@@ -123,7 +123,7 @@ public class ScanMovementStrategy implements MovementStrategy {
                             );
 
             if (stopRequestAfterReverse != null) {
-                System.out.println("Request is currentlt being served at floor  " + elevator.getCurrentFloor());
+                System.out.println("Request is currently being served at floor  " + elevator.getCurrentFloor());
                 elevator.getRequestQueue()
                         .removeRequest(stopRequestAfterReverse);
 
